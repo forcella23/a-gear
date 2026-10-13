@@ -7,6 +7,8 @@
   <style>
     img { max-width: 100%; max-height: 70vh; }
     .card { margin: 1.5em 0; max-width: 700px; }
+    .video-box { position: relative; height: 0; }
+    .video-box iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
     .source { font-size: 0.85em; color: gray; }
   </style>
 </head>
@@ -18,9 +20,10 @@
   <script src="data.js"></script>
   <script>
     // Settings: change these numbers whenever you like
-    const MIN_TOTAL = 3;     // fewer items than this = try new tags
-    const MAX_TOTAL = 5;     // never show more than this
-    const LIMITS = { image: 3, link: 2, text: 3 };  // max per type
+    const MIN_TOTAL = 3;
+    const MAX_TOTAL = 5;
+    const LIMITS = { image: 3, link: 2, text: 3, video: 1 };  // max per type
+    const TYPES = Object.keys(LIMITS);
 
     function shuffle(list) {
       return [...list].sort(() => Math.random() - 0.5);
@@ -29,11 +32,12 @@
     function buildSelection(picked) {
       const matches = shuffle(items.filter(i => i.tags.some(t => picked.includes(t))));
       const target = MIN_TOTAL + Math.floor(Math.random() * (MAX_TOTAL - MIN_TOTAL + 1));
-      const counts = { image: 0, link: 0, text: 0 };
+      const counts = { image: 0, link: 0, text: 0, video: 0 };
       const chosen = [];
 
-      // Round 1: one item of each type, if there is one
-      for (const type of ["image", "link", "text"]) {
+      // Round 1: one item of each type (in random order), if there is one
+      for (const type of shuffle(TYPES)) {
+        if (chosen.length >= target) break;
         const found = matches.find(i => i.type === type);
         if (found) { chosen.push(found); counts[type]++; }
       }
@@ -48,6 +52,25 @@
       return shuffle(chosen);
     }
 
+    function showItem(i) {
+      if (i.type === "image") {
+        return '<div class="card"><img src="' + i.content + '"></div>';
+      }
+      if (i.type === "link") {
+        return '<div class="card"><a href="' + i.content + '" target="_blank">' + i.title + '</a></div>';
+      }
+      if (i.type === "video") {
+        const width = i.ratio > 100 ? 360 : 700;   // tall videos get a narrower box
+        return '<div class="card" style="max-width:' + width + 'px">' +
+          '<div class="video-box" style="padding-top:' + i.ratio + '%">' +
+          '<iframe loading="lazy" src="https://player.vimeo.com/video/' + i.id +
+          '?badge=0&player_id=0&app_id=58479" allow="autoplay; fullscreen; picture-in-picture" ' +
+          'allowfullscreen referrerpolicy="strict-origin-when-cross-origin" title="' + i.title + '"></iframe>' +
+          '</div></div>';
+      }
+      return '<div class="card"><p>' + i.content + '</p><span class="source">' + i.source + '</span></div>';
+    }
+
     function makePage() {
       const allTags = [...new Set(items.flatMap(i => i.tags))];
       let picked, chosen;
@@ -56,13 +79,8 @@
         chosen = buildSelection(picked);
         if (chosen.length >= MIN_TOTAL) break;
       }
-
       document.getElementById("picked").textContent = picked.join(" / ");
-      document.getElementById("gallery").innerHTML = chosen.map(i => {
-        if (i.type === "image") return '<div class="card"><img src="' + i.content + '"></div>';
-        if (i.type === "link")  return '<div class="card"><a href="' + i.content + '" target="_blank">' + i.title + '</a></div>';
-        return '<div class="card"><p>' + i.content + '</p><span class="source">' + i.source + '</span></div>';
-      }).join("");
+      document.getElementById("gallery").innerHTML = chosen.map(showItem).join("");
     }
   </script>
 </body>
