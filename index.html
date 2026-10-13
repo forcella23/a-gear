@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>My page</title>
   <style>
-    img { max-width: 100%; height: auto; }
-    .card { margin: 1em 0; }
+    img { max-width: 100%; max-height: 70vh; }
+    .card { margin: 1.5em 0; max-width: 700px; }
+    .source { font-size: 0.85em; color: gray; }
   </style>
 </head>
 <body>
@@ -16,19 +17,51 @@
 
   <script src="data.js"></script>
   <script>
+    // Settings: change these numbers whenever you like
+    const MIN_TOTAL = 3;     // fewer items than this = try new tags
+    const MAX_TOTAL = 5;     // never show more than this
+    const LIMITS = { image: 3, link: 2, text: 3 };  // max per type
+
+    function shuffle(list) {
+      return [...list].sort(() => Math.random() - 0.5);
+    }
+
+    function buildSelection(picked) {
+      const matches = shuffle(items.filter(i => i.tags.some(t => picked.includes(t))));
+      const target = MIN_TOTAL + Math.floor(Math.random() * (MAX_TOTAL - MIN_TOTAL + 1));
+      const counts = { image: 0, link: 0, text: 0 };
+      const chosen = [];
+
+      // Round 1: one item of each type, if there is one
+      for (const type of ["image", "link", "text"]) {
+        const found = matches.find(i => i.type === type);
+        if (found) { chosen.push(found); counts[type]++; }
+      }
+      // Round 2: fill the rest, respecting the limits
+      for (const item of matches) {
+        if (chosen.length >= target) break;
+        if (chosen.includes(item)) continue;
+        if (counts[item.type] >= LIMITS[item.type]) continue;
+        chosen.push(item);
+        counts[item.type]++;
+      }
+      return shuffle(chosen);
+    }
+
     function makePage() {
-      // 1. collect every tag once
       const allTags = [...new Set(items.flatMap(i => i.tags))];
-      // 2. shuffle and keep 3
-      const picked = allTags.sort(() => Math.random() - 0.5).slice(0, 3);
-      // 3. keep items that share at least one picked tag
-      const matches = items.filter(i => i.tags.some(t => picked.includes(t)));
+      let picked, chosen;
+      for (let attempt = 0; attempt < 50; attempt++) {
+        picked = shuffle(allTags).slice(0, 3);
+        chosen = buildSelection(picked);
+        if (chosen.length >= MIN_TOTAL) break;
+      }
 
       document.getElementById("picked").textContent = picked.join(" / ");
-      document.getElementById("gallery").innerHTML = matches.map(i => {
+      document.getElementById("gallery").innerHTML = chosen.map(i => {
         if (i.type === "image") return '<div class="card"><img src="' + i.content + '"></div>';
         if (i.type === "link")  return '<div class="card"><a href="' + i.content + '" target="_blank">' + i.title + '</a></div>';
-        return '<div class="card">' + i.content + '</div>';
+        return '<div class="card"><p>' + i.content + '</p><span class="source">' + i.source + '</span></div>';
       }).join("");
     }
   </script>
