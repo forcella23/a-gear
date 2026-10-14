@@ -20,9 +20,10 @@
   <script src="data.js"></script>
   <script>
     // Settings: change these numbers whenever you like
-    const MIN_TOTAL = 3;
-    const MAX_TOTAL = 5;
+    const MIN_TOTAL = 3;      // fewer items than this = try new tags
+    const MAX_TOTAL = 5;      // never show more than this
     const LIMITS = { image: 3, link: 2, text: 3, video: 1 };  // max per type
+    const TALL_VIDEO_WIDTH = 360;   // width in pixels of portrait videos
     const TYPES = Object.keys(LIMITS);
 
     function shuffle(list) {
@@ -35,19 +36,30 @@
       const counts = { image: 0, link: 0, text: 0, video: 0 };
       const chosen = [];
 
-      // Round 1: one item of each type (in random order), if there is one
+      function add(item) { chosen.push(item); counts[item.type]++; }
+      function canAdd(item) { return !chosen.includes(item) && counts[item.type] < LIMITS[item.type]; }
+      function covered(tag) { return chosen.some(i => i.tags.includes(tag)); }
+      function score(item) { return item.tags.filter(t => picked.includes(t) && !covered(t)).length; }
+
+      // Round 1: every drawn tag must appear in at least one item
+      for (const tag of shuffle(picked)) {
+        if (covered(tag)) continue;
+        const options = matches.filter(i => i.tags.includes(tag) && canAdd(i));
+        if (options.length === 0) return null;        // can't show this tag: try new tags
+        options.sort((a, b) => score(b) - score(a));  // prefer items covering more tags
+        add(options[0]);
+      }
+      // Round 2: variety, one of each type not yet shown
       for (const type of shuffle(TYPES)) {
         if (chosen.length >= target) break;
-        const found = matches.find(i => i.type === type);
-        if (found) { chosen.push(found); counts[type]++; }
+        if (counts[type] > 0) continue;
+        const found = matches.find(i => i.type === type && canAdd(i));
+        if (found) add(found);
       }
-      // Round 2: fill the rest, respecting the limits
+      // Round 3: fill the rest
       for (const item of matches) {
         if (chosen.length >= target) break;
-        if (chosen.includes(item)) continue;
-        if (counts[item.type] >= LIMITS[item.type]) continue;
-        chosen.push(item);
-        counts[item.type]++;
+        if (canAdd(item)) add(item);
       }
       return shuffle(chosen);
     }
@@ -60,7 +72,7 @@
         return '<div class="card"><a href="' + i.content + '" target="_blank">' + i.title + '</a></div>';
       }
       if (i.type === "video") {
-        const width = i.ratio > 100 ? 360 : 700;   // tall videos get a narrower box
+        const width = i.ratio > 100 ? TALL_VIDEO_WIDTH : 700;
         return '<div class="card" style="max-width:' + width + 'px">' +
           '<div class="video-box" style="padding-top:' + i.ratio + '%">' +
           '<iframe loading="lazy" src="https://player.vimeo.com/video/' + i.id +
@@ -73,12 +85,14 @@
 
     function makePage() {
       const allTags = [...new Set(items.flatMap(i => i.tags))];
-      let picked, chosen;
+      let picked, chosen = null;
       for (let attempt = 0; attempt < 50; attempt++) {
         picked = shuffle(allTags).slice(0, 3);
         chosen = buildSelection(picked);
-        if (chosen.length >= MIN_TOTAL) break;
+        if (chosen && chosen.length >= MIN_TOTAL) break;
       }
+      if (!chosen) chosen = [];
+
       document.getElementById("picked").textContent = picked.join(" / ");
       document.getElementById("gallery").innerHTML = chosen.map(showItem).join("");
     }
